@@ -34,12 +34,21 @@ class ServerValidator extends Validator3Base<OpenApi3, Server> {
 
   @Override
   public void validate(ValidationContext<OpenApi3> context, OpenApi3 api, Server server, ValidationResults results) {
-    checkUrlWithVariables(api, server, results);
+    checkUrlWithVariables(api, server, results, new ArrayList<>());
     validateMap(context, api, server.getVariables(), results, false, CRUMB_VARIABLES, Regexes.NAME_REGEX, ServerVariableValidator.instance());
     validateMap(context, api, server.getExtensions(), results, false, CRUMB_EXTENSIONS, Regexes.EXT_REGEX, null);
   }
 
-  private void checkUrlWithVariables(OpenApi3 api, Server server, ValidationResults results) {
+  @Override
+  public void validate(ValidationContext<OpenApi3> context, OpenApi3 api, Server server, ValidationResults results,
+                       List<String> skipList) {
+    checkUrlWithVariables(api, server, results, skipList);
+    validateMap(context, api, server.getVariables(), results, false, CRUMB_VARIABLES, Regexes.NAME_REGEX, ServerVariableValidator.instance());
+    validateMap(context, api, server.getExtensions(), results, false, CRUMB_EXTENSIONS, Regexes.EXT_REGEX, null);
+  }
+
+  private void checkUrlWithVariables(OpenApi3 api, Server server,
+                                     ValidationResults results, List<String> skipList) {
     final String url = server.getUrl();
 
     boolean hasVariableIssues = false;
@@ -51,10 +60,10 @@ class ServerValidator extends Validator3Base<OpenApi3, Server> {
         variables.add(matcher.group(2));
       }
 
-      if (!variables.isEmpty() && server.getVariables() == null) {
+      if (!skipUrlValidation(url, skipList) && !variables.isEmpty() && server.getVariables() == null) {
         results.add(CRUMB_URL, VARIABLES_NOT_DEFINED, url);
         hasVariableIssues = true;
-      } else if (server.getVariables() != null) {
+      } else if (!skipUrlValidation(url, skipList) && server.getVariables() != null) {
         // Validate defined variables
         for (String variable : variables) {
           if (!server.getVariables().containsKey(variable)) {
@@ -68,6 +77,14 @@ class ServerValidator extends Validator3Base<OpenApi3, Server> {
     if (!hasVariableIssues) {
       checkServerUrl(api, server, results);
     }
+  }
+
+  private boolean skipUrlValidation(String url, List<String> skipList) {
+    for (String skipItem: skipList) {
+      if (url.endsWith(skipItem))
+        return true;
+    }
+    return false;
   }
 
   private void checkServerUrl(final OpenApi3 api,
